@@ -8,6 +8,7 @@ from __future__ import print_function
 
 import edward as ed
 import tensorflow as tf
+from matplotlib import pyplot as plt
 
 from edward.models import Empirical, MultivariateNormalFull
 
@@ -23,7 +24,10 @@ n_samples = 2000
 qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
 
 inference = ed.SGHMC({z: qz})
-inference.run(step_size=1.)
+# inference = ed.HMC({z: qz})
+inference.run(step_size=.1)
+# inference = ed.SGLD({z: qz})
+# inference.run(step_size = 3.)
 
 # CRITICISM
 sess = ed.get_session()
@@ -32,3 +36,15 @@ print("Inferred posterior mean:")
 print(mean)
 print("Inferred posterior std:")
 print(std)
+
+# Retrieve sampling traces.
+var = qz.get_variables()[0]
+val = var.value()
+trace = val.eval()
+# fig, ax = plt.subplots(2)
+# ax[0].plot(trace[:,0])
+# ax[1].plot(trace[:,1])
+# plt.show()
+fig, ax = plt.subplots(1)
+ax.scatter(trace[:,0], trace[:,1])
+plt.show()
