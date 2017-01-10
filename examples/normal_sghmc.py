@@ -10,6 +10,7 @@ import edward as ed
 import tensorflow as tf
 from matplotlib import pyplot as plt
 import numpy as np
+import seaborn as sns
 
 from edward.models import Empirical, MultivariateNormalFull
 
@@ -31,7 +32,7 @@ qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
 # inference.run(step_size = 25.)
 
 # CRITICISM
-# sess = ed.get_session()
+sess = ed.get_session()
 # mean, std = sess.run([qz.mean(), qz.std()])
 # print("Inferred posterior mean:")
 # print(mean)
@@ -92,11 +93,11 @@ def demo_bnn():
 
 if __name__ == '__main__':
     # Run SGHMC
-    n_samples = 5000
+    n_samples = 50000
     #qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
     qz = Empirical(params=tf.Variable(tf.zeros([n_samples, 2])))
     inference = ed.SGHMC({z: qz})
-    inference.run(step_size=1.)
+    inference.run(step_size=2e-2)
     trace = qz.get_variables()[0].value().eval()
     r_trace = inference.r.values()[0].value().eval()
     fig, ax = plt.subplots(1)
@@ -104,4 +105,5 @@ if __name__ == '__main__':
     #ax.plot(trace[::50,0], trace[::50,1], marker = ".")
     plt.hold(True)
     make_contour_plot()
+    sns.jointplot(trace[::50,0], trace[::50,1], kind = "kde")
     plt.show()

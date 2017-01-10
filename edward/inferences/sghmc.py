@@ -43,7 +43,7 @@ class SGHMC(MonteCarlo):
     """
     super(SGHMC, self).__init__(*args, **kwargs)
 
-  def initialize(self, step_size=0.25, *args, **kwargs):
+  def initialize(self, step_size=0.25, friction=0.1, *args, **kwargs):
     """
     Parameters
     ----------
@@ -54,6 +54,7 @@ class SGHMC(MonteCarlo):
     self.step_size = step_size
     self.r = {z: tf.Variable(tf.zeros(qz.get_event_shape()))
               for z, qz in six.iteritems(self.latent_vars)}
+    self.friction = friction
     return super(SGHMC, self).initialize(*args, **kwargs)
 
   def build_update(self):
@@ -67,7 +68,7 @@ class SGHMC(MonteCarlo):
     old_r_sample = {z: r for z, r in six.iteritems(self.r)}
 
     # Simulate Langevin dynamics.
-    friction = tf.constant(0.1, dtype = tf.float32)
+    friction = tf.constant(self.friction, dtype = tf.float32)
     learning_rate = tf.constant(self.step_size * 0.01, dtype = tf.float32)   # No adaptive.
     grad_log_joint = tf.gradients(self._log_joint(old_sample),
                                   list(six.itervalues(old_sample)))
@@ -83,9 +84,10 @@ class SGHMC(MonteCarlo):
       normal = Normal(mu=tf.zeros(event_shape),
                       sigma=tf.sqrt(learning_rate * friction) * tf.ones(event_shape))
       sample[z] = old_sample[z] + old_r_sample[z]   # This implements eq. 15 from paper.
-      r_sample[z] = (1. - 0.5 * friction)*old_r_sample[z] \
-        + learning_rate * grad_log_p + normal.sample()
-      #sample[z] = r_sample[z]
+      with tf.control_dependencies([sample[z]]):    # Need to make sure the position gets updated first.
+        r_sample[z] = (1. - 0.5 * friction)*old_r_sample[z] \
+                      + learning_rate * grad_log_p + normal.sample()
+      # sample[z] = r_sample[z]
 
     # Update Empirical random variables.
     assign_ops = []
@@ -94,7 +96,8 @@ class SGHMC(MonteCarlo):
     for z, qz in six.iteritems(self.latent_vars):
       variable = variables[qz.params.op.inputs[0].op.inputs[0].name]
       assign_ops.append(tf.scatter_update(variable, self.t, sample[z]))
-      assign_ops.append(tf.assign(self.r[z], r_sample[z]))
+      # with tf.control_dependencies(assign_ops[-1:]):
+      assign_ops.append(tf.assign(self.r[z], r_sample[z]).op)
 
     # Increment n_accept.
     assign_ops.append(self.n_accept.assign_add(1))
