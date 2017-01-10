@@ -38,11 +38,6 @@ qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
 # print("Inferred posterior std:")
 # print(std)
 
-# MODEL
-sess = ed.get_session()
-z = MultivariateNormalFull(
-    mu=tf.ones(2),
-    sigma=tf.constant([[1.0, 0.8], [0.8, 1.0]]))
 
 def make_contour_plot(to_label = True):
     # Sample from true
@@ -97,15 +92,16 @@ def demo_bnn():
 
 if __name__ == '__main__':
     # Run SGHMC
-    n_samples = 500
-    qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
+    n_samples = 5000
+    #qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
+    qz = Empirical(params=tf.Variable(tf.zeros([n_samples, 2])))
     inference = ed.SGHMC({z: qz})
-    inference.run(step_size = 1)
-    var = qz.get_variables()[0]
-    val = var.value()
-    trace = val.eval()
+    inference.run(step_size=1.)
+    trace = qz.get_variables()[0].value().eval()
+    r_trace = inference.r.values()[0].value().eval()
     fig, ax = plt.subplots(1)
     ax.scatter(trace[::50,0], trace[::50,1], marker = ".")
+    #ax.plot(trace[::50,0], trace[::50,1], marker = ".")
     plt.hold(True)
     make_contour_plot()
     plt.show()
