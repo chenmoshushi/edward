@@ -63,6 +63,9 @@ class SGHMC(MonteCarlo):
     discretization error goes to zero as the learning rate decreases.
     """
     print("Building update.")
+    # Aliasing the parameters avoids a nasty race condition when updating sample
+    # and r_sample in lines 88, 89.
+    # TODO: It may be more memory-efficient to use explicit dependency control.
     old_sample = {z: tf.gather(qz.params, tf.maximum(self.t - 1, 0))
                   for z, qz in six.iteritems(self.latent_vars)}
     old_r_sample = {z: r for z, r in six.iteritems(self.r)}
@@ -84,10 +87,8 @@ class SGHMC(MonteCarlo):
       normal = Normal(mu=tf.zeros(event_shape),
                       sigma=tf.sqrt(learning_rate * friction) * tf.ones(event_shape))
       sample[z] = old_sample[z] + old_r_sample[z]   # This implements eq. 15 from paper.
-      with tf.control_dependencies([sample[z]]):    # Need to make sure the position gets updated first.
-        r_sample[z] = (1. - 0.5 * friction)*old_r_sample[z] \
-                      + learning_rate * grad_log_p + normal.sample()
-      # sample[z] = r_sample[z]
+      r_sample[z] = (1. - 0.5 * friction)*old_r_sample[z] \
+                    + learning_rate * grad_log_p + normal.sample()
 
     # Update Empirical random variables.
     assign_ops = []
