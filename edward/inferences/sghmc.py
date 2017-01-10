@@ -52,8 +52,9 @@ class SGHMC(MonteCarlo):
     """
     print(step_size)
     self.step_size = step_size
-    self.r = {z: Empirical(params=tf.Variable(tf.zeros(qz.params.get_shape())))
+    self.r = {z: tf.zeros(qz.get_event_shape())
               for z, qz in six.iteritems(self.latent_vars)}
+    import ipdb; ipdb.set_trace()
     return super(SGHMC, self).initialize(*args, **kwargs)
 
   def build_update(self):
@@ -86,10 +87,10 @@ class SGHMC(MonteCarlo):
       event_shape = qz.get_event_shape()
       normal = Normal(mu=tf.zeros(event_shape),
                       sigma=tf.sqrt(learning_rate * friction) * tf.ones(event_shape))
+      sample[z] = old_sample[z] + old_r_sample[z]   # This implements eq. 15 from paper.
       r_sample[z] = (1. - 0.5 * friction)*old_r_sample[z] \
         + learning_rate * grad_log_p + normal.sample()
-      sample[z] = old_sample[z] + r_sample[z]   # This implements eq. 15 from paper.
-      # sample[z] = r_sample[z]
+      # sample[z] = old_r_sample[z]
 
     # Update Empirical random variables.
     assign_ops = []
@@ -98,6 +99,7 @@ class SGHMC(MonteCarlo):
     for z, qz in six.iteritems(self.latent_vars):
       variable = variables[qz.params.op.inputs[0].op.inputs[0].name]
       assign_ops.append(tf.scatter_update(variable, self.t, sample[z]))
+      # tf.assign(self.r[z].name, r_sample[z])
       self.r[z] = r_sample[z]
 
     # Increment n_accept.

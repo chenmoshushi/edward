@@ -97,7 +97,7 @@ def demo_bnn():
 
 if __name__ == '__main__':
     # Run SGHMC
-    n_samples = 50000
+    n_samples = 500
     qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
     inference = ed.SGHMC({z: qz})
     inference.run(step_size = 1)
