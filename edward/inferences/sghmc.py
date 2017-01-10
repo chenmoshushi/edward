@@ -6,7 +6,7 @@ import six
 import tensorflow as tf
 
 from edward.inferences.monte_carlo import MonteCarlo
-from edward.models import Normal, RandomVariable
+from edward.models import Normal, RandomVariable, Empirical
 from edward.util import copy
 
 
@@ -50,7 +50,10 @@ class SGHMC(MonteCarlo):
     step_size : float, optional
       Constant scale factor of learning rate.
     """
+    print(step_size)
     self.step_size = step_size
+    self.r = {z: Empirical(params=tf.Variable(tf.zeros(qz.params.get_shape())))
+              for z, qz in six.iteritems(self.latent_vars)}
     return super(SGHMC, self).initialize(*args, **kwargs)
 
   def build_update(self):
@@ -58,20 +61,22 @@ class SGHMC(MonteCarlo):
     Simulate Langevin dynamics using a discretized integrator. Its
     discretization error goes to zero as the learning rate decreases.
     """
+    print("Building update.")
     old_sample = {z: tf.gather(qz.params, tf.maximum(self.t - 1, 0))
                   for z, qz in six.iteritems(self.latent_vars)}
-
+    old_r_sample = {z: r for z, r in six.iteritems(self.r)}
     # Simulate Langevin dynamics.
-    momentum = tf.constant(0.1, dtype=tf.float32)
-    learning_rate = self.step_size / tf.cast(self.t + 1, tf.float32)
+    friction = tf.constant(0.1, dtype = tf.float32)
+    learning_rate = tf.constant(self.step_size * 0.01, dtype = tf.float32)   # No adaptive.
     grad_log_joint = tf.gradients(self._log_joint(old_sample),
                                   list(six.itervalues(old_sample)))
 
+    print(learning_rate)
     r_sample = {}
-    for z, qz in six.iteritems(self.latent_vars):
-      event_shape = qz.get_event_shape()
-      normal = Normal(mu=tf.zeros(event_shape), sigma=tf.ones(event_shape))
-      r_sample[z] = normal.sample()
+    # for z, qz in six.iteritems(self.latent_vars):
+    #   event_shape = qz.get_event_shape()
+    #   normal = Normal(mu=tf.zeros(event_shape), sigma=tf.ones(event_shape))
+    #   r_sample[z] = normal.sample()
 
     sample = {}
     for z, qz, grad_log_p in \
@@ -80,10 +85,11 @@ class SGHMC(MonteCarlo):
             grad_log_joint):
       event_shape = qz.get_event_shape()
       normal = Normal(mu=tf.zeros(event_shape),
-                      sigma=learning_rate * momentum * tf.ones(event_shape))
-      sample[z] = old_sample[z] + r_sample[z]
-      r_sample[z] = (1. - momentum)*r_sample[z] \
-              + 0.5 * learning_rate * grad_log_p + normal.sample()
+                      sigma=tf.sqrt(learning_rate * friction) * tf.ones(event_shape))
+      r_sample[z] = (1. - 0.5 * friction)*old_r_sample[z] \
+        + learning_rate * grad_log_p + normal.sample()
+      sample[z] = old_sample[z] + r_sample[z]   # This implements eq. 15 from paper.
+      # sample[z] = r_sample[z]
 
     # Update Empirical random variables.
     assign_ops = []
@@ -92,6 +98,7 @@ class SGHMC(MonteCarlo):
     for z, qz in six.iteritems(self.latent_vars):
       variable = variables[qz.params.op.inputs[0].op.inputs[0].name]
       assign_ops.append(tf.scatter_update(variable, self.t, sample[z]))
+      self.r[z] = r_sample[z]
 
     # Increment n_accept.
     assign_ops.append(self.n_accept.assign_add(1))

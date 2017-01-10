@@ -26,8 +26,7 @@ qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
 
 # inference = ed.HMC({z: qz})
 # inference.run(step_size=1.)
-# inference = ed.SGHMC({z: qz})
-# inference.run(step_size = 25.)
+
 # inference = ed.SGLD({z: qz})
 # inference.run(step_size = 25.)
 
@@ -58,6 +57,21 @@ def make_contour_plot(to_label = True):
     if to_label:
         plt.clabel(cs, inline=1, fontsize=10)
 
+def demo_hmc():
+    "HMC demo with parameters tuned to make things look reasonable."
+    n_samples = 10000
+    qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
+    inference = ed.HMC({z: qz})
+    inference.run(step_size = 0.3)
+    var = qz.get_variables()[0]
+    val = var.value()
+    trace = val.eval()
+    fig, ax = plt.subplots(1)
+    ax.scatter(trace[::100,0], trace[::100,1], marker = ".")
+    plt.hold(True)
+    make_contour_plot()
+    plt.show()
+
 def demo_sgld():
     "SGLD demo with parameters tuned to make things look reasonable."
     n_samples = 50000
@@ -73,24 +87,25 @@ def demo_sgld():
     make_contour_plot()
     plt.show()
 
-demo_sgld()
+def demo_bnn():
+    """
+    Demo for Tianqi's neural net.
+    """
+    # Single-hidden-layer Bayesian nnet with 100 hidden nodes; sigmoid hidden,
+    # softmax output.
+    pass
 
-
-
-# # Retrieve sampling traces.
-# var = qz.get_variables()[0]
-# val = var.value()
-# trace = val.eval()
-# # fig, ax = plt.subplots(2)
-# # ax[0].plot(trace[:,0])
-# # ax[1].plot(trace[:,1])
-# # plt.show()
-# fig, ax = plt.subplots(1)
-# # ax.scatter(trace[:,0], trace[:,1], marker = ".")
-# ax.scatter(trace[::500,0], trace[::500,1], marker = ".")
-# # ax.plot(trace[:,0], trace[:,1], marker = ".")
-# plt.hold(True)
-# make_contour_plot()
-# plt.show()
-
-#TODO: Plot the logprob contours
+if __name__ == '__main__':
+    # Run SGHMC
+    n_samples = 50000
+    qz = Empirical(params=tf.Variable(tf.random_normal([n_samples, 2])))
+    inference = ed.SGHMC({z: qz})
+    inference.run(step_size = 1)
+    var = qz.get_variables()[0]
+    val = var.value()
+    trace = val.eval()
+    fig, ax = plt.subplots(1)
+    ax.scatter(trace[::50,0], trace[::50,1], marker = ".")
+    plt.hold(True)
+    make_contour_plot()
+    plt.show()
