@@ -14,6 +14,7 @@ from edward.util import get_session
 try:
   import theano
 except ImportError:
+  no_theano = True
   pass
 
 
@@ -154,7 +155,7 @@ class Inference(object):
             sess.run(var.initializer, {ph: value})
           else:
             self.data[key] = value
-        elif isinstance(key, theano.tensor.sharedvar.TensorSharedVariable):
+        elif (not no_theano) and isinstance(key, theano.tensor.sharedvar.TensorSharedVariable):
           self.data[key] = value
         elif isinstance(key, tf.Tensor):
           if isinstance(value, RandomVariable):
