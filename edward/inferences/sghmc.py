@@ -52,7 +52,7 @@ class SGHMC(MonteCarlo):
     """
     print(step_size)
     self.step_size = step_size
-    self.r = {z: tf.Variable(tf.zeros(qz.get_event_shape()))
+    self.r = {z: tf.Variable(tf.zeros(qz.params.get_shape()[1:]))
               for z, qz in six.iteritems(self.latent_vars)}
     self.friction = friction
     return super(SGHMC, self).initialize(*args, **kwargs)
