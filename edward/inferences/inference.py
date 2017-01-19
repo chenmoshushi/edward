@@ -373,4 +373,5 @@ class Inference(object):
   def finalize(self):
     """Function to call after convergence.
     """
-    pass
+    if self.logging:
+      self.train_writer.close()
