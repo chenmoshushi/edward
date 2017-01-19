@@ -12,14 +12,14 @@ from edward.util import copy
 
 class SGHMC(MonteCarlo):
   # TODO: update documentation
-  """Stochastic gradient Langevin dynamics (Welling and Teh, 2011).
+  """Stochastic gradient Hamiltonian Monte Carlo (Chen et al., 2014).
 
   Notes
   -----
   In conditional inference, we infer :math:`z` in :math:`p(z, \\beta
   \mid x)` while fixing inference over :math:`\\beta` using another
   distribution :math:`q(\\beta)`.
-  ``SGLD`` substitutes the model's log marginal density
+  ``SGHMC`` substitutes the model's log marginal density
 
   .. math::
 
