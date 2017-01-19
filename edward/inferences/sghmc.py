@@ -11,7 +11,6 @@ from edward.util import copy
 
 
 class SGHMC(MonteCarlo):
-  # TODO: update documentation
   """Stochastic gradient Hamiltonian Monte Carlo (Chen et al., 2014).
 
   Notes
@@ -49,36 +48,37 @@ class SGHMC(MonteCarlo):
     ----------
     step_size : float, optional
       Constant scale factor of learning rate.
+    friction : float, optional
+      Constant scale on the friction term in the Hamiltonian system.
     """
-    print(step_size)
     self.step_size = step_size
-    self.r = {z: tf.Variable(tf.zeros(qz.params.get_shape()[1:]))
-              for z, qz in six.iteritems(self.latent_vars)}
     self.friction = friction
+    self.v = {z: tf.Variable(tf.zeros(qz.params.get_shape()[1:]))
+              for z, qz in six.iteritems(self.latent_vars)}
     return super(SGHMC, self).initialize(*args, **kwargs)
 
   def build_update(self):
     """
-    Simulate Langevin dynamics using a discretized integrator. Its
-    discretization error goes to zero as the learning rate decreases.
+    Simulate Hamiltonian dynamics with friction using a discretized
+    integrator. Its discretization error goes to zero as the learning rate
+    decreases.
+    Implements the update equations from (15) of Chen et al., 2014.
     """
-    print("Building update.")
-    # Aliasing the parameters avoids a nasty race condition when updating sample
-    # and r_sample in lines 88, 89.
-    # TODO: It may be more memory-efficient to use explicit dependency control.
+    # TODO: Would it be more memory-efficient to use tf.control_dependencies,
+    # rather than repeatedly re-assign attributes stored on self.v?
     old_sample = {z: tf.gather(qz.params, tf.maximum(self.t - 1, 0))
                   for z, qz in six.iteritems(self.latent_vars)}
-    old_r_sample = {z: r for z, r in six.iteritems(self.r)}
+    old_v_sample = {z: v for z, v in six.iteritems(self.v)}
 
-    # Simulate Langevin dynamics.
+    # Simulate Hamiltonian dynamics with friction.
     friction = tf.constant(self.friction, dtype = tf.float32)
-    learning_rate = tf.constant(self.step_size * 0.01, dtype = tf.float32)   # No adaptive.
+    # TODO: Allow option for exponentially decaying learning rate, or similar.
+    learning_rate = tf.constant(self.step_size * 0.01, dtype = tf.float32)
     grad_log_joint = tf.gradients(self._log_joint(old_sample),
                                   list(six.itervalues(old_sample)))
 
-    print(learning_rate)
-    r_sample = {}
-    sample = {}
+    sample = {}                 # v_sample is so named to indicate that it represents a velocity,
+    v_sample = {}               # rather than a momentum.
     for z, qz, grad_log_p in \
         zip(six.iterkeys(self.latent_vars),
             six.itervalues(self.latent_vars),
@@ -86,8 +86,8 @@ class SGHMC(MonteCarlo):
       event_shape = qz.get_event_shape()
       normal = Normal(mu=tf.zeros(event_shape),
                       sigma=tf.sqrt(learning_rate * friction) * tf.ones(event_shape))
-      sample[z] = old_sample[z] + old_r_sample[z]   # This implements eq. 15 from paper.
-      r_sample[z] = (1. - 0.5 * friction)*old_r_sample[z] \
+      sample[z] = old_sample[z] + old_v_sample[z]
+      v_sample[z] = (1. - 0.5 * friction)*old_v_sample[z] \
                     + learning_rate * grad_log_p + normal.sample()
 
     # Update Empirical random variables.
@@ -97,8 +97,7 @@ class SGHMC(MonteCarlo):
     for z, qz in six.iteritems(self.latent_vars):
       variable = variables[qz.params.op.inputs[0].op.inputs[0].name]
       assign_ops.append(tf.scatter_update(variable, self.t, sample[z]))
-      # with tf.control_dependencies(assign_ops[-1:]):
-      assign_ops.append(tf.assign(self.r[z], r_sample[z]).op)
+      assign_ops.append(tf.assign(self.v[z], v_sample[z]).op)
 
     # Increment n_accept.
     assign_ops.append(self.n_accept.assign_add(1))
@@ -114,6 +113,8 @@ class SGHMC(MonteCarlo):
     z_sample : dict
       Latent variable keys to samples.
     """
+    # TODO: This appears to be identical across HMC, SGHMC, SGLD. Should it be
+    # factored out?
     if self.model_wrapper is None:
       scope = 'inference_' + str(id(self))
       # Form dictionary in order to replace conditioning on prior or
